@@ -1,0 +1,195 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#18342f">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="Cahier IFMEM">
+  <meta name="description" content="Révisions IFMEM. Séries de questions, schémas et corrections expliquées, avec progression personnelle et mode hors ligne.">
+  <title>Cahier IFMEM</title>
+  <link id="-gd-engine-icon" rel="icon" type="image/png" href="index.icon.png" />
+<link rel="apple-touch-icon" href="index.apple-touch-icon.png"/>
+<link rel="manifest" href="index.manifest.json">
+
+  <style>
+    * { box-sizing:border-box }
+    html,body { margin:0; width:100%; height:100%; overflow:hidden; background:#f6f5ef; color:#18342f; font:14px system-ui,sans-serif }
+    body { display:flex; flex-direction:column; height:100dvh; padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left) }
+    #tools { flex:none; min-height:38px; padding:3px 10px; display:flex; justify-content:space-between; align-items:center; gap:8px; border-bottom:1px solid #cfdbd0 }
+    button { font:inherit; color:#18342f; background:#fffefa; border:1px solid #cfdbd0; border-radius:7px; padding:7px 12px; min-height:36px; cursor:pointer }
+    button:focus-visible { outline:3px solid #16594e; outline-offset:2px }
+    #offline-state { font-size:12px }
+    #app { position:relative; flex:1; min-height:0; min-width:0 }
+    #canvas { width:100%; height:100%; display:block; outline:none; touch-action:none }
+    #loading { position:absolute; inset:0; display:grid; place-content:center; padding:28px; background:#f6f5ef; text-align:center }
+    #loading[hidden] { display:none }
+    #loading h1 { font:32px Georgia,serif; margin:0 0 16px }
+    #loading p { max-width:420px; margin:10px auto; line-height:1.5 }
+    progress { width:100%; max-width:320px; margin:14px auto; accent-color:#16594e }
+    #retry { margin:15px auto }
+    dialog { color:#18342f; background:#fffefa; border:1px solid #cfdbd0; border-radius:14px; max-width:500px; max-height:85dvh; width:calc(100% - 28px); padding:24px; line-height:1.55; overflow:auto }
+    dialog::backdrop { background:#18342f99 }
+    dialog h2 { font:27px Georgia,serif; margin:0 0 15px }
+    dialog h3 { font-size:17px; margin:22px 0 6px }
+    dialog button { width:100%; margin-top:12px; background:#e3f2e8 }
+  </style>
+</head>
+<body>
+  <nav id="tools" aria-label="Installation et connexion">
+    <span id="offline-state" role="status">Préparation…</span>
+    <button id="help" aria-label="Installation et hors ligne">Installer / aide</button>
+  </nav>
+  <main id="app">
+    <canvas id="canvas" tabindex="0" aria-label="Cahier IFMEM, lecteur de questions">Votre navigateur doit prendre en charge le canevas.</canvas>
+    <section id="loading" aria-live="polite">
+      <h1>Cahier IFMEM</h1>
+      <p id="message">Téléchargement pour les révisions hors ligne…</p>
+      <progress id="progress" aria-label="Préparation du cahier"></progress>
+      <p id="detail">Au premier lancement, laissez cette page ouverte avec une connexion Internet. Environ 40 Mo sont à télécharger.</p>
+      <button id="retry" hidden>Réessayer</button>
+    </section>
+  </main>
+  <dialog id="instructions" aria-labelledby="help-title">
+    <h2 id="help-title">Votre cahier, partout</h2>
+    <h3>Sur iPhone et iPad</h3>
+    <p>Ouvrez ce lien dans <strong>Safari</strong>. Touchez <strong>Partager</strong>, puis <strong>Sur l’écran d’accueil</strong>. Si proposé, activez « Ouvrir comme app web », puis touchez « Ajouter ».</p>
+    <p>Lancez ensuite Cahier IFMEM depuis sa nouvelle icône et attendez la mention <strong>Hors ligne prêt</strong> avant de partir.</p>
+    <h3>Réviser sans connexion</h3>
+    <p>Les trois matières et leurs corrigés sont téléchargés ensemble. Vous pouvez vérifier le fonctionnement en activant le mode avion, puis en rouvrant le cahier.</p>
+    <h3>Votre progression</h3>
+    <p>Vos réponses restent sur cet appareil, dans ce navigateur ou cette app web. Elles ne sont pas partagées avec les collègues et ne se synchronisent pas entre appareils. Utilisez toujours la même icône pour retrouver vos séries.</p>
+    <p>Évitez la navigation privée. Effacer les données du site supprime la progression et le téléchargement hors ligne. Le système peut aussi libérer le cache si l’espace manque.</p>
+    <h3>Mises à jour</h3>
+    <p>Ouvrez le cahier avec Internet pour recevoir les nouvelles matières. Si une mise à jour est prête, fermez toutes ses fenêtres puis rouvrez-le. Votre historique est conservé.</p>
+    <button id="close-help">Revenir aux révisions</button>
+  </dialog>
+  <script src="index.js"></script>
+  <script>
+  (() => {
+    'use strict';
+    const config = {"args":[],"canvasResizePolicy":2,"emscriptenPoolSize":8,"ensureCrossOriginIsolationHeaders":false,"executable":"index","experimentalVK":false,"fileSizes":{"index.pck":4853136,"index.wasm":37695054},"focusCanvas":true,"gdextensionLibs":[],"godotPoolSize":4,"serviceWorker":"index.service.worker.js"};
+    config.canvasResizePolicy = 0;
+    config.serviceWorker = '';
+    config.locale = 'fr';
+    const canvas = document.getElementById('canvas');
+    const loading = document.getElementById('loading');
+    const message = document.getElementById('message');
+    const detail = document.getElementById('detail');
+    const progress = document.getElementById('progress');
+    const state = document.getElementById('offline-state');
+    const retry = document.getElementById('retry');
+    const dialog = document.getElementById('instructions');
+    document.getElementById('help').onclick = () => dialog.showModal();
+    document.getElementById('close-help').onclick = () => { dialog.close(); canvas.focus(); };
+    retry.onclick = () => location.reload();
+    function resize() {
+      const rect = document.getElementById('app').getBoundingClientRect();
+      const scale = Math.min(devicePixelRatio || 1, 2);
+      canvas.width = Math.max(1, Math.round(rect.width * scale));
+      canvas.height = Math.max(1, Math.round(rect.height * scale));
+    }
+    new ResizeObserver(resize).observe(document.getElementById('app'));
+    resize();
+    function failure(error) {
+      console.error(error);
+      message.textContent = error.message || 'Le cahier n’a pas pu démarrer.';
+      detail.textContent = 'Vérifiez votre connexion et l’espace disponible, puis réessayez. Sur iPhone ou iPad, utilisez une version récente de Safari.';
+      state.textContent = 'Préparation interrompue';
+      progress.hidden = true;
+      retry.hidden = false;
+    }
+    async function prepareOffline() {
+      if (!('serviceWorker' in navigator)) throw new Error('Ce navigateur ne permet pas le téléchargement hors ligne.');
+      const registration = await navigator.serviceWorker.register('index.service.worker.js');
+      let timer, watched, changed;
+      const watch = worker => {
+        if (!worker) return;
+        watched = worker;
+        changed = () => {
+          if (worker.state === 'redundant') rejectInstall(new Error('Le téléchargement hors ligne a été interrompu. Réessayez avec une connexion Internet.'));
+        };
+        worker.addEventListener('statechange', changed);
+        changed();
+      };
+      let rejectInstall;
+      const failed = new Promise((resolve,reject) => {
+        rejectInstall = reject;
+        timer = setTimeout(() => reject(new Error('Le téléchargement prend trop de temps. Réessayez avec une connexion plus stable.')),180000);
+      });
+      const found = () => watch(registration.installing);
+      registration.addEventListener('updatefound', found);
+      watch(registration.installing);
+      if (!registration.active && !registration.installing && !registration.waiting) rejectInstall(new Error('Le téléchargement hors ligne a échoué. Réessayez avec une connexion Internet.'));
+      try {
+        await Promise.race([navigator.serviceWorker.ready, failed]);
+      } finally {
+        clearTimeout(timer);
+        registration.removeEventListener('updatefound', found);
+        if (watched) watched.removeEventListener('statechange', changed);
+      }
+      if (!navigator.serviceWorker.controller) {
+        await new Promise((resolve,reject) => {
+          const finish = () => {
+            if (!navigator.serviceWorker.controller) return;
+            clearTimeout(timeout);
+            navigator.serviceWorker.removeEventListener('controllerchange',finish);
+            resolve();
+          };
+          const timeout = setTimeout(() => {
+            navigator.serviceWorker.removeEventListener('controllerchange',finish);
+            reject(new Error('L’installation n’est pas terminée. Fermez puis rouvrez le cahier.'));
+          },10000);
+          navigator.serviceWorker.addEventListener('controllerchange',finish);
+          registration.active?.postMessage('claim');
+          finish();
+        });
+        // Un rechargement forcé peut avoir récupéré un nouveau shell réseau.
+        // Recharger sous contrôle du cache garde moteur et données cohérents.
+        location.reload();
+        await new Promise(() => {});
+      }
+      if (registration.waiting) state.textContent = 'Mise à jour prête : fermez puis rouvrez';
+      registration.addEventListener('updatefound', () => {
+        const worker = registration.installing;
+        worker?.addEventListener('statechange', () => {
+          if (worker.state === 'installed' && navigator.serviceWorker.controller) state.textContent = 'Mise à jour prête : fermez puis rouvrez';
+        });
+      });
+      return registration;
+    }
+    async function start() {
+      const missing = Engine.getMissingFeatures({threads:false});
+      if (missing.length) throw new Error('Ce navigateur ne dispose pas des fonctions graphiques nécessaires.');
+      await prepareOffline();
+      message.textContent = 'Ouverture des révisions…';
+      const engine = new Engine(config);
+      await engine.startGame({
+        onProgress(current,total) {
+          if (total > 0) { progress.max = total; progress.value = current; }
+        }
+      });
+      resize();
+      loading.hidden = true;
+      document.body.dataset.ready = 'true';
+      if (!state.textContent.startsWith('Mise à jour')) state.textContent = 'Hors ligne prêt';
+      canvas.focus();
+      // The browser may refuse persistence; the existing cache still works.
+      navigator.storage?.persist?.().catch(() => {});
+    }
+    if (!navigator.locks) {
+      failure(new Error('Mettez Safari à jour pour conserver une progression fiable.'));
+    } else {
+      const lockName = 'cahier-ifmem:' + new URL('./', location.href).pathname;
+      navigator.locks.request(lockName, {ifAvailable:true}, async lock => {
+        if (!lock) throw new Error('Cahier IFMEM est déjà ouvert. Reprenez sa première fenêtre ou fermez-la puis réessayez.');
+        await start();
+        // The browser releases this lock even if the tab is abruptly closed.
+        await new Promise(() => {});
+      }).catch(failure);
+    }
+  })();
+  </script>
+</body>
+</html>
+
