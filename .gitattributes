@@ -2,3 +2,5 @@
 *.wasm binary
 *.pck binary
 *.png binary
+OFL-*.txt -whitespace
+*.html whitespace=-blank-at-eof
